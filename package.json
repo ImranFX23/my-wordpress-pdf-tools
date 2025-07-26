@@ -1,0 +1,13 @@
+{
+  "name": "my-pdf-tool-suite",
+  "version": "1.0.0",
+  "description": "Serverless PDF tool suite for WordPress",
+  "main": "functions/pdf-handler.js",
+  "scripts": {
+    "start": "netlify dev"
+  },
+  "dependencies": {
+    "busboy": "^1.6.0",
+    "node-fetch": "^3.3.2"
+  }
+}
