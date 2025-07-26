@@ -1,12 +1,15 @@
 const fetch = require('node-fetch');
 const Busboy = require('busboy');
-const FormData = require('form-data'); // <-- নতুন টুল ইমপোর্ট করা হয়েছে
+const FormData = require('form-data');
+const dns = require('dns'); // DNS মডিউল যোগ করা হয়েছে
+
+// IPv4 ব্যবহার করতে বাধ্য করার জন্য একটি ট্রিক
+dns.setDefaultResultOrder('ipv4first');
 
 const APDF_API_KEY = process.env.APDF_API_KEY;
 const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN;
 const APDF_API_URL = 'https://api.apdf.io/v1/pdf';
 
-// এই অংশটি ঠিক আছে, কোনো পরিবর্তন লাগবে না
 function parseMultipartForm(event) {
     return new Promise((resolve, reject) => {
         const busboy = Busboy({
@@ -39,11 +42,15 @@ exports.handler = async (event) => {
     }
 
     try {
+        console.log("Function invoked. Parsing form data...");
         const { files, fields } = await parseMultipartForm(event);
         const tool = fields.tool;
+        console.log(`Tool identified: ${tool}. Number of files: ${files.length}`);
 
-        // --- মূল পরিবর্তন এখানে ---
-        // 'form-data' লাইব্রেরি ব্যবহার করে ফাইল পাঠানোর জন্য প্রস্তুত করা হচ্ছে
+        if (!tool || files.length === 0) {
+          throw new Error("Tool or files are missing from the request.");
+        }
+
         const formData = new FormData();
         files.forEach(file => {
             formData.append('files', file.buffer, { filename: file.filename });
@@ -53,16 +60,20 @@ exports.handler = async (event) => {
             formData.append('options', fields.options);
         }
         
-        const response = await fetch(`${APDF_API_URL}/${tool}/`, {
+        const targetUrl = `${APDF_API_URL}/${tool}/`;
+        console.log(`Preparing to send request to: ${targetUrl}`);
+
+        const response = await fetch(targetUrl, {
             method: 'POST',
             headers: {
                 'Authorization': `Bearer ${APDF_API_KEY}`,
-                ...formData.getHeaders() // form-data লাইব্রেরি নিজে থেকে সঠিক হেডার তৈরি করবে
+                ...formData.getHeaders()
             },
             body: formData,
+            timeout: 30000 // ৩০ সেকেন্ড টাইমআউট
         });
-        // --- পরিবর্তন শেষ ---
-
+        
+        console.log(`Received response from API. Status: ${response.status}`);
         const result = await response.json();
         
         if (!response.ok) {
@@ -70,6 +81,7 @@ exports.handler = async (event) => {
             throw new Error(result.message || 'aPDF.io API থেকে একটি ত্রুটি পাওয়া গেছে');
         }
 
+        console.log("Successfully processed. Returning file URL.");
         return {
             statusCode: 200,
             headers,
@@ -77,11 +89,11 @@ exports.handler = async (event) => {
         };
 
     } catch (error) {
-        console.error('Serverless function error:', error);
+        console.error('SERVER-SIDE CRASH:', error); // সার্ভারের মূল এরর লগ
         return {
             statusCode: 500,
             headers,
-            body: JSON.stringify({ error: error.message }),
+            body: JSON.stringify({ error: `Server-side error: ${error.message}` }),
         };
     }
 };
