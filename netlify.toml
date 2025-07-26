@@ -2,7 +2,3 @@
   command = "npm install"
   functions = "functions"
 
-[[redirects]]
-  from = "/*"
-  to = "/.netlify/functions/pdf-handler"
-  status = 200
